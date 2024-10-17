@@ -12,7 +12,10 @@ import sys
 from functools import wraps
 import logging
 
+import delete_manager
+import parser
 from auth_manager import AuthManager
+from parser import ProductParser
 
 # Настройка логирования
 logging.basicConfig(
@@ -557,7 +560,7 @@ def run_bot_for_card(section_number, card, product_data, virt_description, delay
         auth_manager.close()
 
 
-def main():
+def create_cards():
     # Отображение меню выбора раздела
     print("Выберите раздел для обработки:")
     for num, name in PlayerokAutomation.SECTION_MAPPING.items():
@@ -621,6 +624,66 @@ def main():
         pool.join()
 
     logging.info("Все процессы завершены.")
+
+
+def delete_cards():
+    print("Ожидайте, идет загрузка доступных для удаления карточек.")
+
+    product_parser = ProductParser()
+    links = product_parser.run_parser()
+    exist_free_cards = parser.main(links)
+
+    if exist_free_cards:
+        logging.info(f"Найденные бесплатные карточки: {exist_free_cards}")
+
+        print("Выберите раздел для удаления относящихся к нему бесплатных карточек:")
+        print("0. Удалить всё")
+
+        unique_cards = list(set(exist_free_cards.values()))
+        for i, value in enumerate(unique_cards, 1):
+            print(f"{i}. {value}")
+
+        try:
+            section_number = int(input("Введите номер раздела: "))
+            if section_number not in range(0, len(unique_cards) + 1):
+                print("Неверный номер раздела.")
+                sys.exit(1)
+        except ValueError:
+            print("Пожалуйста, введите корректный номер раздела.")
+            sys.exit(1)
+
+        if section_number == 0:
+            matching_keys = list(exist_free_cards.keys())
+        else:
+            selected_value = unique_cards[section_number - 1]
+            # Находим все ключи, соответствующие выбранному значению
+            matching_keys = [key for key, value in exist_free_cards.items() if value == selected_value]
+
+        # отправка ссылок
+        delete_manager.main(matching_keys)
+
+    else:
+        print("Нет доступных для удаления карточек.")
+
+
+def main():
+    print("Выберите действие:\n1. Создание карточек\n2. Удаление карточек")
+
+    try:
+        action = int(input("Введите номер действия: "))
+        if action not in [1, 2]:
+            print("Неверный номер раздела.")
+            sys.exit(1)
+    except ValueError:
+        print("Пожалуйста, введите корректный номер раздела.")
+        sys.exit(1)
+
+    if action == 1:
+        create_cards()
+    elif action == 2:
+        delete_cards()
+
+    print("Программа завершена.")
 
 
 if __name__ == "__main__":

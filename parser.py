@@ -160,6 +160,7 @@ def run_bot(link, delay=0):
 
 def main(links):
     exist_free_cards = {}
+    results = []  # Список для хранения задач
 
     # Настройка multiprocessing.Pool
     max_processes = 10  # Максимальное количество параллельных процессов
@@ -168,20 +169,24 @@ def main(links):
         for link in links:
             delay = random.uniform(1, 5)
             result_game = pool.apply_async(run_bot, args=(link, delay))
-            if result_game:
-                exist_free_cards[link] = result_game.get()
+            results.append((link, result_game))  # Сохраняем задачи в список
 
         pool.close()
-        pool.join()
+        pool.join()  # Ожидаем завершения всех процессов
 
-    print("Все процессы завершены.")
+    # Получаем результаты после завершения всех процессов
+    for link, result_game in results:
+        if result_game.get():
+            exist_free_cards[link] = result_game.get()
+
     logging.info(f"Все процессы нахождения бесплатных карточек завершены.")
     return exist_free_cards
 
 
-# Пример использования класса
-if __name__ == "__main__":
-    playerok_automation = ProductParser()
-    links = playerok_automation.run_parser()
-    exist_free_cards = main(links)
-    logging.info(f"Найденные бесплатные карточки: {exist_free_cards}")
+
+# # Пример использования класса
+# if __name__ == "__main__":
+#     playerok_automation = ProductParser()
+#     links = playerok_automation.run_parser()
+#     exist_free_cards = main(links)
+#     logging.info(f"Найденные бесплатные карточки: {exist_free_cards}")
