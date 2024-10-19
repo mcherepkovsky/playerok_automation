@@ -493,21 +493,20 @@ def run_bot_for_card(section_number, card, product_data, virt_description, delay
         auth_manager.close()
 
 
-def create_cards():
-    # Отображение меню выбора раздела
-    print("Выберите раздел для обработки:")
-    for num, name in PlayerokAutomation.SECTION_MAPPING.items():
-        print(f"{num}. {name}")
+def run_multiproc(cards, section_number, product_data, virt_description):
+    # Настройка multiprocessing.Pool
+    max_processes = 3  # Максимальное количество параллельных процессов
 
-    try:
-        section_number = int(input("Введите номер раздела: "))
-        if section_number not in PlayerokAutomation.SECTION_MAPPING:
-            print("Неверный номер раздела.")
-            sys.exit(1)
-    except ValueError:
-        print("Пожалуйста, введите корректный номер раздела.")
-        sys.exit(1)
+    with multiprocessing.Pool(processes=max_processes) as pool:
+        for index, card in enumerate(cards):
+            # Добавление случайной задержки (например, до 10 секунд) для каждого задания
+            delay = random.uniform(1, 15)
+            pool.apply_async(run_bot_for_card, args=(section_number, card, product_data, virt_description, delay))
 
+        pool.close()
+        pool.join()
+
+def create_virt_cards(section_number):
     # Путь к файлу с карточками выбранного раздела
     section_name = PlayerokAutomation.SECTION_MAPPING[section_number]
     card_file = f'chips/{section_name}/presets.json'
@@ -544,17 +543,82 @@ def create_cards():
         logging.error(f"Файл {card_file} пуст.")
         sys.exit(1)
 
-    # Настройка multiprocessing.Pool
-    max_processes = 3  # Максимальное количество параллельных процессов
+    run_multiproc(cards, section_number, product_data, virt_description)
 
-    with multiprocessing.Pool(processes=max_processes) as pool:
-        for index, card in enumerate(cards):
-            # Добавление случайной задержки (например, до 10 секунд) для каждого задания
-            delay = random.uniform(1, 15)
-            pool.apply_async(run_bot_for_card, args=(section_number, card, product_data, virt_description, delay))
+def create_acc_cards(section_number):
+    # Путь к файлу с карточками выбранного раздела
+    section_name = PlayerokAutomation.SECTION_MAPPING[section_number]
+    card_file = f'accounts/presets.json'
+    desc_file = 'descriptions.json'
 
-        pool.close()
-        pool.join()
+    # Загрузка описания из JSON-файла
+    try:
+        with open(desc_file, 'r', encoding='utf-8') as f:
+            descriptions_file = json.load(f)
+
+        # Извлекаем описание для выбранного сервера
+        account_description = descriptions_file["descriptions"].get(section_name, {}).get("account_description", "")
+        product_data = descriptions_file["product_data"]["text"]
+
+    except FileNotFoundError:
+        logging.error(f"Файл {desc_file} не найден.")
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        logging.error(f"Ошибка при чтении JSON из файла {desc_file}: {e}")
+        sys.exit(1)
+
+    # Загрузка карточек из JSON-файла
+    try:
+        with open(card_file, 'r', encoding='utf-8') as f:
+            cards = json.load(f)
+    except FileNotFoundError:
+        logging.error(f"Файл {card_file} не найден.")
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        logging.error(f"Ошибка при чтении JSON из файла {card_file}: {e}")
+        sys.exit(1)
+
+    if not cards:
+        logging.error(f"Файл {card_file} пуст.")
+        sys.exit(1)
+
+    run_multiproc(cards, section_number, product_data, account_description)
+
+def create_cards():
+    # Отображение меню выбора раздела
+    print("Выберите раздел для обработки:")
+    for num, name in PlayerokAutomation.SECTION_MAPPING.items():
+        print(f"{num}. {name}")
+
+    try:
+        section_number = int(input("Введите номер раздела: "))
+        if section_number not in PlayerokAutomation.SECTION_MAPPING:
+            print("Неверный номер раздела.")
+            sys.exit(1)
+    except ValueError:
+        print("Пожалуйста, введите корректный номер раздела.")
+        sys.exit(1)
+
+    if section_number == 1:
+        print("Выберите действие:\n1. Вирты\n2. Аккаунты\n3. Аккаунты с виртами")
+
+        try:
+            action = int(input("Введите номер действия: "))
+            if action not in [1, 2, 3]:
+                print("Неверный номер действия.")
+                sys.exit(1)
+        except ValueError:
+            print("Пожалуйста, введите корректный номер раздела.")
+            sys.exit(1)
+
+        if action == 1:
+            create_virt_cards(section_number)
+        elif action == 2:
+            create_acc_cards(section_number)
+        elif action == 3:
+            pass
+    else:
+        create_virt_cards(section_number)
 
     logging.info("Все процессы завершены.")
 
