@@ -163,11 +163,11 @@ def main(links):
     results = []  # Список для хранения задач
 
     # Настройка multiprocessing.Pool
-    max_processes = 10  # Максимальное количество параллельных процессов
+    max_processes = 5  # Максимальное количество параллельных процессов
 
     with multiprocessing.Pool(processes=max_processes) as pool:
         for link in links:
-            delay = random.uniform(1, 5)
+            delay = random.uniform(1, 10)
             result_game = pool.apply_async(run_bot, args=(link, delay))
             results.append((link, result_game))  # Сохраняем задачи в список
 

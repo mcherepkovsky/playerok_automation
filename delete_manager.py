@@ -81,7 +81,7 @@ def main(links):
 
     with multiprocessing.Pool(processes=max_processes) as pool:
         for link in links:
-            delay = random.uniform(1, 10)
+            delay = random.uniform(1, 15)
             pool.apply_async(run_bot, args=(link, delay))
 
         pool.close()

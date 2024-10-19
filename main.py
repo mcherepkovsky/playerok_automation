@@ -148,10 +148,8 @@ class PlayerokAutomation:
 
     def start_sell(self):
         """Разделяем сервера"""
-        if self.section_number == 1:
-            pass
-        elif self.section_number == 5:
-            servers = self.load_servers_names("Матрешка RP")
+        if self.section_number in [1, 5]:
+            servers = self.load_servers_names(self.full_section_name.get(str(self.section_number)))
             for server_num, server_name in servers.items():
                 self.server_name = server_name
                 self.url = ""
@@ -332,12 +330,27 @@ class PlayerokAutomation:
     @retry_on_exception(max_retries=5, base_delay=20, backoff_factor=2)
     def fill_product_data(self, wait):
         """Заполнение полей данных продукта."""
-        product_data_input = wait.until(
-            EC.presence_of_element_located((By.XPATH, "//textarea[@name='comment']"))
-        )
-        self.auth_manager.driver.execute_script("arguments[0].value = arguments[1];", product_data_input,
-                                                self.product_data)
-        product_data_input.send_keys(" ")
+        if self.section_number == 1:
+            radio_button = wait.until(
+                EC.element_to_be_clickable((By.XPATH, "//span[text()='Перевод виртов через игровой банк (без входа в аккаунт)']"))
+            )
+            radio_button.click()
+            logging.info("Радиокнопка нажата.")
+
+            product_data_input = wait.until(
+                EC.presence_of_element_located((By.XPATH, "//textarea[@name='dataFields.1ee79c37-4961-6300-0646-e1043b767644.value']"))
+            )
+            self.auth_manager.driver.execute_script("arguments[0].value = arguments[1];", product_data_input,
+                                                    self.product_data)
+            product_data_input.send_keys(" ")
+        else:
+            product_data_input = wait.until(
+                EC.presence_of_element_located((By.XPATH, "//textarea[@name='comment']"))
+            )
+            self.auth_manager.driver.execute_script("arguments[0].value = arguments[1];", product_data_input,
+                                                    self.product_data)
+            product_data_input.send_keys(" ")
+
         logging.info("Поле данных продукта заполнено.")
 
         self.click_submit_button(wait)
