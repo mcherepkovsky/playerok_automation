@@ -92,7 +92,6 @@ def retry_on_exception(max_retries=5, base_delay=10, backoff_factor=2):
 
     return decorator
 
-
 class PlayerokAutomation:
     SECTION_MAPPING = {
         1: "black_russia",
@@ -120,6 +119,7 @@ class PlayerokAutomation:
         self.virt_description = virt_description
         self.auth_manager = auth_manager
         self.url = ""
+        self.server_name = ""
 
     def load_section_names(self):
         """Загрузка полных названий секций из JSON-файла."""
@@ -133,7 +133,33 @@ class PlayerokAutomation:
             logging.error(f"Ошибка при чтении JSON из 'game_names.json': {e}")
             sys.exit(1)
 
+    def load_servers_names(self, server_name):
+        """Загрузка полных названий серверов из JSON-файла."""
+        try:
+            with open('server_names.json', 'r', encoding='utf-8') as json_file:
+                data = json.load(json_file)
+                return data[server_name]
+        except FileNotFoundError:
+            logging.error("Файл 'server_names.json' не найден.")
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            logging.error(f"Ошибка при чтении JSON из 'server_names.json': {e}")
+            sys.exit(1)
+
     def start_sell(self):
+        """Разделяем сервера"""
+        if self.section_number == 1:
+            pass
+        elif self.section_number == 5:
+            servers = self.load_servers_names("Матрешка RP")
+            for server_num, server_name in servers.items():
+                self.server_name = server_name
+                self.url = ""
+                self.initial_actions()
+        else:
+            self.initial_actions()
+
+    def initial_actions(self):
         """Выполнение действий на странице продажи."""
         url = "https://playerok.com/sell"
         try:
@@ -153,12 +179,7 @@ class PlayerokAutomation:
         else:
             logging.info(f"Раздел {self.section_number} выбран.")
 
-        # Выполнение действий в зависимости от секции
-        section_method = getattr(self, f'section_{self.section_number}', None)
-        if callable(section_method):
-            section_method(wait)
-        else:
-            logging.error(f"Нет метода для раздела {self.section_number}")
+        self.fill_common_fields(wait)
 
         logging.info(f"Карточка '{self.card['name']}' успешно обработана.")
 
@@ -186,7 +207,7 @@ class PlayerokAutomation:
                 f"Попытка {attempt} из {self.MAX_RETRIES}: Повторный запуск процесса продажи через {delay} секунд.")
             time.sleep(delay)
             try:
-                self.start_sell()
+                self.initial_actions()
                 return  # Если успешно, выходим
             except Exception as e:
                 logging.error(f"Попытка {attempt}: Ошибка при повторном запуске процесса продажи: {e}")
@@ -399,148 +420,47 @@ class PlayerokAutomation:
         but_virt.click()
         logging.info("Кнопка 'Вирты' нажата.")
 
-        if self.section_number not in [1, 2, 5, 10]:
-            self.fill_pic(wait)
-            self.fill_pname_field(wait)
-            self.fill_description_field(wait)
-            self.fill_price_field(wait)
-            self.fill_product_data(wait)
-            self.transition_exh(wait)
+        if self.section_number in [1, 5]:
+            self.choose_server_click(wait, self.server_name)
+            self.input_virt_count(wait, "amount")
+            self.click_submit_button(wait)
+        elif self.section_number == 2:
+            self.choose_server_click(wait, "Любой")
+            self.input_virt_count(wait, "amount")
+            self.click_submit_button(wait)
+        elif self.section_number == 10:
+            self.input_virt_count(wait, "chips")
+
+        self.fill_pic(wait)
+        self.fill_pname_field(wait)
+        self.fill_description_field(wait)
+        self.fill_price_field(wait)
+        self.fill_product_data(wait)
+        self.transition_exh(wait)
 
         self.navigate_edit_and_other_page()
         self.fill_dprice_field(wait)
 
-    # Пример методов для разных разделов
-    def section_1(self, wait):
-        """Действия для раздела 1: black_russia"""
-        self.fill_common_fields(wait)
-        try:
-            # Специфические действия для раздела 1
-            specific_button = wait.until(EC.element_to_be_clickable((By.ID, "specific_button_1")))
-            specific_button.click()
 
-            # Нажатие кнопки "Продать"
-            sell_button = self.auth_manager.driver.find_element(By.ID, "sell_button_id")
-            sell_button.click()
+    def choose_server_click(self, wait, server):
+        """Выбор сервера и клик по кнопке 'Далее'."""
+        choose_server = wait.until(
+            EC.element_to_be_clickable(
+            (By.XPATH, f"//div[@class='MuiBox-root mui-style-1p30snl' and @aria-checked='false' and text()='{server}']"))
+        )
 
-            # Ожидание подтверждения
-            wait.until(EC.presence_of_element_located((By.XPATH, "//div[@class='success_message']")))
-            print(f"Раздел 1: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 1 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
+        choose_server.click()
+        logging.info("Кнопка 'Выбрать сервер' нажата.")
 
-    def section_2(self, wait):
-        """Действия для раздела 2: arizona"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 2: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 2 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
+    def input_virt_count(self, wait, type):
+        """Ввод количества виртов."""
+        amount_input = wait.until(
+            EC.presence_of_element_located((By.XPATH, f"//input[@name='{type}']"))
+        )
 
-    def section_3(self, wait):
-        """Действия для раздела 3: radmir"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 3: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 3 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
-
-    def section_4(self, wait):
-        """Действия для раздела 4: hassle"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 4: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 4 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
-
-    def section_5(self, wait):
-        """Действия для раздела 5: matreshka"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 5: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 5 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
-
-    def section_6(self, wait):
-        """Действия для раздела 6: gta_5_rp"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 6: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 6 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
-
-    def section_7(self, wait):
-        """Действия для раздела 7: majestic"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 7: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 7 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
-
-    def section_8(self, wait):
-        """Действия для раздела 8: next_rp"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 8: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 8 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
-
-    def section_9(self, wait):
-        """Действия для раздела 9: province"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 9: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 9 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
-
-    def section_10(self, wait):
-        """Действия для раздела 10: rodina"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 10: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 10 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
-
-    def section_11(self, wait):
-        """Действия для раздела 11: amazing"""
-        self.fill_common_fields(wait)
-        try:
-            print(f"Раздел 11: Карточка '{self.card['name']}' успешно обработана.")
-        except Exception as e:
-            print(f"Ошибка в разделе 11 для карточки '{self.card['name']}': {e}")
-            if self.check_retry_message():
-                print("Получено сообщение 'попробуйте позже' в разделе 1.")
-                raise Exception("попробуйте позже")
+        amount_input.clear()
+        amount_input.send_keys(str(self.card['amount']))
+        logging.info(f"Поле Количества виртов заполнено значением '{self.card['amount']}'.")
 
 
 def run_bot_for_card(section_number, card, product_data, virt_description, delay=0):
