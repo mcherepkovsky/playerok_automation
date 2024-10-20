@@ -15,6 +15,7 @@ import logging
 import delete_manager
 import parser
 from auth_manager import AuthManager
+from delete_req_manager import DeleteReqManager
 from parser import ProductParser
 
 # Настройка логирования
@@ -581,9 +582,8 @@ def create_cards():
 def delete_cards():
     print("Ожидайте, идет загрузка доступных для удаления карточек.")
 
-    product_parser = ProductParser()
-    links = product_parser.run_parser()
-    exist_free_cards = parser.main(links)
+    delete_mng = DeleteReqManager()
+    exist_free_cards = delete_mng.fetch_existing_cards()
 
     if exist_free_cards:
         logging.info(f"Найденные бесплатные карточки: {exist_free_cards}")
@@ -612,8 +612,9 @@ def delete_cards():
             matching_keys = [key for key, value in exist_free_cards.items() if value == selected_value]
 
         # отправка ссылок
-        delete_manager.main(matching_keys)
-
+        results_deleting = delete_mng.delete_cards_parallel(matching_keys)
+        for result in results_deleting:
+            print(result)
     else:
         print("Нет доступных для удаления карточек.")
 
