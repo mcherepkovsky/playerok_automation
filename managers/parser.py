@@ -7,7 +7,7 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from auth_manager import AuthManager
+from auth.auth_manager import AuthManager
 
 
 class ProductParser:

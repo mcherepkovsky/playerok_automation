@@ -12,14 +12,14 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler("automation.log", encoding='utf-8'),
+        logging.FileHandler("logs/automation.log", encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
 
 
 class DeleteReqManager:
-    def __init__(self, cookies_file='cookies_data.ckjson'):
+    def __init__(self, cookies_file='data/cookies_data.ckjson'):
         self.cookies_file = cookies_file
         self.cookies = self.load_cookies_from_file()
         self.scraper = cloudscraper.create_scraper()
@@ -66,7 +66,7 @@ class DeleteReqManager:
                 exist_cards[card_id] = game_name
         return exist_cards
 
-    def get_my_id(self):
+    def get_my_id(self, retries=10):
         """Получение ID пользователя"""
         headers = self.get_common_headers()
 
@@ -75,15 +75,25 @@ class DeleteReqManager:
             "variables": {},
             "query": "query viewer {\n  viewer {\n    ...Viewer\n    __typename\n  }\n}\n\nfragment Viewer on User {\n  id\n  username\n  email\n  role\n  hasFrozenBalance\n  supportChatId\n  systemChatId\n  unreadChatsCounter\n  isBlocked\n  isBlockedFor\n  createdAt\n  profile {\n    id\n    avatarURL\n    __typename\n  }\n  __typename\n}"}
 
-        response = self.scraper.post(self.graphql_url, headers=headers, json=data)
+        for attempt in range(retries):
+            try:
+                # Пауза для снижения нагрузки на сервер, увеличивающаяся с каждой попыткой
+                time.sleep(uniform(0.5, 5) * (attempt + 1))
+                response = self.scraper.post(self.graphql_url, headers=headers, json=data)
 
-        # Проверяем статус ответа
-        if response.status_code == 200:
-            self.user_id = self.extract_id(response.text)
-        else:
-            logging.error(f"Ошибка получения UserID: {response.status_code}, {response.text}")
-
-        return self.user_id
+                # Проверяем статус ответа
+                if response.status_code == 200:
+                    self.user_id = self.extract_id(response.text)
+                    return self.user_id
+                elif response.status_code == 429:
+                    logging.error(f"Слишком много запросов. Попытка {attempt + 1} из {retries}. Ждем...")
+                elif response.status_code == 403:
+                    logging.error(f"Запрос заблокирован. Попытка {attempt + 1} из {retries}. Ждем...")
+                else:
+                    logging.error(f"Ошибка получения UserID: {response.status_code}, {response.text}")
+            except Exception as e:
+                logging.error(f"Ошибка при попытке {attempt + 1}: {str(e)}")
+        return None
 
     def get_all_slugs(self):
         """Получение slug всех карточек"""
@@ -110,7 +120,7 @@ class DeleteReqManager:
 
         return self.slugs
 
-    def get_card_inf(self, slug):
+    def get_card_inf(self, slug, retries=5):
         referer_url = "https://playerok.com/products/" + slug
         headers = self.get_common_headers()
         headers['Referer'] = referer_url
@@ -122,20 +132,35 @@ class DeleteReqManager:
             "query": "query item($slug: String, $id: UUID) {\n  item(slug: $slug, id: $id) {\n    ...RegularItem\n    __typename\n  }\n}\n\nfragment RegularItem on Item {\n  ...RegularMyItem\n  ...RegularForeignItem\n  __typename\n}\n\nfragment RegularMyItem on MyItem {\n  ...ItemFields\n  priority\n  sequence\n  priorityPrice\n  statusExpirationDate\n  comment\n  viewsCounter\n  statusDescription\n  editable\n  statusPayment {\n    ...StatusPaymentTransaction\n    __typename\n  }\n  moderator {\n    id\n    username\n    __typename\n  }\n  approvalDate\n  deletedAt\n  createdAt\n  updatedAt\n  mayBePublished\n  __typename\n}\n\nfragment ItemFields on Item {\n  id\n  slug\n  name\n  description\n  rawPrice\n  price\n  attributes\n  status\n  priorityPosition\n  sellerType\n  user {\n    ...ItemUser\n    __typename\n  }\n  buyer {\n    ...ItemUser\n    __typename\n  }\n  attachments {\n    ...PartialFile\n    __typename\n  }\n  category {\n    ...RegularGameCategory\n    __typename\n  }\n  game {\n    ...RegularGameProfile\n    __typename\n  }\n  comment\n  dataFields {\n    ...GameCategoryDataFieldWithValue\n    __typename\n  }\n  obtainingType {\n    ...GameCategoryObtainingType\n    __typename\n  }\n  __typename\n}\n\nfragment ItemUser on UserFragment {\n  ...UserEdgeNode\n  __typename\n}\n\nfragment UserEdgeNode on UserFragment {\n  ...RegularUserFragment\n  __typename\n}\n\nfragment RegularUserFragment on UserFragment {\n  id\n  username\n  role\n  avatarURL\n  isOnline\n  isBlocked\n  rating\n  testimonialCounter\n  createdAt\n  supportChatId\n  systemChatId\n  __typename\n}\n\nfragment PartialFile on File {\n  id\n  url\n  __typename\n}\n\nfragment RegularGameCategory on GameCategory {\n  id\n  slug\n  name\n  categoryId\n  gameId\n  obtaining\n  options {\n    ...RegularGameCategoryOption\n    __typename\n  }\n  props {\n    ...GameCategoryProps\n    __typename\n  }\n  noCommentFromBuyer\n  instructionForBuyer\n  instructionForSeller\n  useCustomObtaining\n  autoConfirmPeriod\n  autoModerationMode\n  __typename\n}\n\nfragment RegularGameCategoryOption on GameCategoryOption {\n  id\n  group\n  label\n  type\n  field\n  value\n  sequence\n  valueRangeLimit {\n    min\n    max\n    __typename\n  }\n  __typename\n}\n\nfragment GameCategoryProps on GameCategoryPropsObjectType {\n  minTestimonials\n  __typename\n}\n\nfragment RegularGameProfile on GameProfile {\n  id\n  name\n  type\n  slug\n  logo {\n    ...PartialFile\n    __typename\n  }\n  __typename\n}\n\nfragment GameCategoryDataFieldWithValue on GameCategoryDataFieldWithValue {\n  id\n  label\n  type\n  inputType\n  copyable\n  hidden\n  required\n  value\n  __typename\n}\n\nfragment GameCategoryObtainingType on GameCategoryObtainingType {\n  id\n  name\n  description\n  gameCategoryId\n  noCommentFromBuyer\n  instructionForBuyer\n  instructionForSeller\n  sequence\n  __typename\n}\n\nfragment StatusPaymentTransaction on Transaction {\n  id\n  operation\n  direction\n  providerId\n  status\n  statusDescription\n  statusExpirationDate\n  value\n  props {\n    paymentURL\n    __typename\n  }\n  __typename\n}\n\nfragment RegularForeignItem on ForeignItem {\n  ...ItemFields\n  __typename\n}"
         }
 
-        # Отправка POST-запроса на удаление товара
-        response = self.scraper.post(self.graphql_url, headers=headers, json=data)
+        for attempt in range(retries):
+            try:
+                # Пауза для снижения нагрузки на сервер, увеличивающаяся с каждой попыткой
+                time.sleep(uniform(0.5, 5) * (attempt + 1))
 
-        # Проверяем статус ответа
-        if response.status_code == 200:
-            card_id, priority, game_name = self.extract_priority_and_game_name(response.text)
-            if priority == "CUSTOM":
-                return game_name, card_id
-            else:
-                return None
-        else:
-            logging.error(f"Ошибка проверки карточки: {response.status_code}, {response.text}")
+                # Отправка POST-запроса
+                response = self.scraper.post(self.graphql_url, headers=headers, json=data)
 
-    def delete_card(self, card_id, retries=3):
+                # Проверка успешного ответа
+                if response.status_code == 200:
+                    card_id, priority, game_name = self.extract_priority_and_game_name(response.text)
+                    if priority == "CUSTOM":
+                        return game_name, card_id
+                    else:
+                        return None
+                elif response.status_code == 429:
+                    logging.error(f"Слишком много запросов. Попытка {attempt + 1} из {retries}. Ждем...")
+                elif response.status_code == 403:
+                    logging.error(f"Запрос заблокирован. Попытка {attempt + 1} из {retries}. Ждем...")
+                else:
+                    logging.error(f"Ошибка запроса: {response.status_code}, {response.text}")
+
+            except Exception as e:
+                logging.error(f"Ошибка при попытке {attempt + 1}: {str(e)}")
+
+        # Возвращаем None, если все попытки не удались
+        return None
+
+    def delete_card(self, card_id, retries=10):
         headers = self.get_common_headers()
         data = {
             "operationName": "removeItem",
@@ -145,7 +170,7 @@ class DeleteReqManager:
 
         for attempt in range(retries):
             # Пауза для снижения нагрузки на сервер
-            time.sleep(uniform(0.5, 5) * (attempt + 1))  # Увеличение задержки при повторных попытках
+            time.sleep(uniform(0.5, 8) * (attempt + 1))  # Увеличение задержки при повторных попытках
 
             response = self.scraper.post(self.graphql_url, headers=headers, json=data)
             if response.status_code == 200:
@@ -162,7 +187,7 @@ class DeleteReqManager:
     def delete_cards_parallel(self, card_ids, max_workers=5):
         results = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_card = {executor.submit(self.delete_card, card_id, 3): card_id for card_id in card_ids}
+            future_to_card = {executor.submit(self.delete_card, card_id, 10): card_id for card_id in card_ids}
 
             for future in as_completed(future_to_card):
                 card_id = future_to_card[future]
@@ -183,7 +208,8 @@ class DeleteReqManager:
             "Cookie": self.cookies,
         }
 
+
 if __name__ == '__main__':
     mhg = DeleteReqManager()
-    #x = mhg.get_all_slugs()
+    # x = mhg.get_all_slugs()
     print(mhg.delete_card("1ef8ee2d-75e7-66a0-84da-19234486a8a2"))

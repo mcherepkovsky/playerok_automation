@@ -12,18 +12,15 @@ import sys
 from functools import wraps
 import logging
 
-import delete_manager
-import parser
-from auth_manager import AuthManager
-from delete_req_manager import DeleteReqManager
-from parser import ProductParser
+from auth.auth_manager import AuthManager
+from managers.delete_req_manager import DeleteReqManager
 
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler("automation.log", encoding='utf-8'),
+        logging.FileHandler("logs/automation.log", encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -93,6 +90,7 @@ def retry_on_exception(max_retries=5, base_delay=10, backoff_factor=2):
 
     return decorator
 
+
 class PlayerokAutomation:
     SECTION_MAPPING = {
         1: "black_russia",
@@ -125,7 +123,7 @@ class PlayerokAutomation:
     def load_section_names(self):
         """Загрузка полных названий секций из JSON-файла."""
         try:
-            with open('game_names.json', 'r', encoding='utf-8') as json_file:
+            with open('data/game_names.json', 'r', encoding='utf-8') as json_file:
                 return json.load(json_file)
         except FileNotFoundError:
             logging.error("Файл 'game_names.json' не найден.")
@@ -137,7 +135,7 @@ class PlayerokAutomation:
     def load_servers_names(self, server_name):
         """Загрузка полных названий серверов из JSON-файла."""
         try:
-            with open('server_names.json', 'r', encoding='utf-8') as json_file:
+            with open('data/server_names.json', 'r', encoding='utf-8') as json_file:
                 data = json.load(json_file)
                 return data[server_name]
         except FileNotFoundError:
@@ -351,13 +349,15 @@ class PlayerokAutomation:
         """Заполнение полей данных продукта."""
         if self.section_number == 1:
             radio_button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//span[text()='Перевод виртов через игровой банк (без входа в аккаунт)']"))
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//span[text()='Перевод виртов через игровой банк (без входа в аккаунт)']"))
             )
             radio_button.click()
             logging.info("Радиокнопка нажата.")
 
             product_data_input = wait.until(
-                EC.presence_of_element_located((By.XPATH, "//textarea[@name='dataFields.1ee79c37-4961-6300-0646-e1043b767644.value']"))
+                EC.presence_of_element_located(
+                    (By.XPATH, "//textarea[@name='dataFields.1ee79c37-4961-6300-0646-e1043b767644.value']"))
             )
             self.auth_manager.driver.execute_script("arguments[0].value = arguments[1];", product_data_input,
                                                     self.product_data)
@@ -474,12 +474,12 @@ class PlayerokAutomation:
         self.navigate_edit_and_other_page()
         self.fill_dprice_field(wait)
 
-
     def choose_server_click(self, wait, server):
         """Выбор сервера и клик по кнопке 'Далее'."""
         choose_server = wait.until(
             EC.element_to_be_clickable(
-            (By.XPATH, f"//div[@class='MuiBox-root mui-style-1p30snl' and @aria-checked='false' and text()='{server}']"))
+                (By.XPATH,
+                 f"//div[@class='MuiBox-root mui-style-1p30snl' and @aria-checked='false' and text()='{server}']"))
         )
 
         choose_server.click()
@@ -531,7 +531,7 @@ def create_cards():
     # Путь к файлу с карточками выбранного раздела
     section_name = PlayerokAutomation.SECTION_MAPPING[section_number]
     card_file = f'chips/{section_name}/presets.json'
-    desc_file = 'descriptions.json'
+    desc_file = 'data/descriptions.json'
 
     # Загрузка описания из JSON-файла
     try:

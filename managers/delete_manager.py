@@ -7,13 +7,13 @@ from selenium.webdriver.support import expected_conditions as EC
 import sys
 import logging
 
-from auth_manager import AuthManager
+from auth.auth_manager import AuthManager
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler("automation.log", encoding='utf-8'),
+        logging.FileHandler("../logs/automation.log", encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )

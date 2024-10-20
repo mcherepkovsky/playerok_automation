@@ -6,7 +6,7 @@ from selenium.webdriver.chrome.options import Options
 
 
 class AuthManager:
-    def __init__(self, cookies_file='cookies_data.ckjson'):
+    def __init__(self, cookies_file='data/cookies_data.ckjson'):
         self.cookies_file = cookies_file
         self.driver = self.init_driver()
 
